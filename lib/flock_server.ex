@@ -3,6 +3,10 @@ defmodule Flock.Server do
 
   @server :flock_server
 
+  def start_nodes(names, options) when is_list(names) and is_map(options) do
+    Enum.map(names, fn(name) -> start_node(name, options) end)
+  end
+
   def start_node(name, options) when is_atom(name) and is_map(options) do
     GenServer.call(@server, {:start_node, name, Map.get(options, :config, nil), Map.get(options, :apps, [])})
   end
@@ -13,6 +17,14 @@ defmodule Flock.Server do
 
   def stop_all do
     GenServer.call(@server, {:stop_all})
+  end
+
+  def split(groups) do
+    GenServer.call(@server, {:split, groups})
+  end
+
+  def join do
+    GenServer.call(@server, {:join})
   end
 
   def nodes do
@@ -55,8 +67,53 @@ defmodule Flock.Server do
     {:reply, :ok, %{ state | nodes: [] }}
   end
 
+  def handle_call({:split, groups}, _from, state) do
+    Enum.each(groups, fn(group) -> enforce_group(group, List.flatten(groups) -- group ) end)
+    {:reply, :ok, state}
+  end
+
+  def handle_call({:join}, _from, state = %{nodes: nodes}) do
+    enforce_group(Enum.map(nodes, &node_id/1), [])
+    {:reply, :ok, state}
+  end
+
   def handle_call({:nodes}, _from, state = %{nodes: nodes}) do
     {:reply, nodes, state}
+  end
+
+  def enforce_group(members, others) do
+    Enum.each(
+      members,
+      fn(member) ->
+        connect_to_all(member, members)
+        disconnect_from_all(member, others)
+      end
+    )
+  end
+
+  def connect_to_all(member, other_members) do
+    Enum.each(
+    other_members,
+    fn(other_member) ->
+      case rpc(member, :net_adm, :ping, [node_name(other_member)]) do
+        :pong -> :ok
+        other -> throw({:error, {:unexpected, member, other}})
+      end
+    end
+  )
+  end
+
+  def disconnect_from_all(member, others) do
+    Enum.each(
+      others,
+      fn(other) ->
+        case rpc(member, :erlang, :disconnect_node, [node_name(other)]) do
+          true -> :ok
+          false-> :ok
+          other -> throw({:error, {:unexpected, member, other}})
+        end
+      end
+    )
   end
 
   def start_node(name, config, apps) do
@@ -100,6 +157,11 @@ defmodule Flock.Server do
 
   def node_name(name) when is_atom(name) do
     String.to_atom(Atom.to_string(name) <> "@localhost")
+  end
+
+  def node_id(node_name) do
+    [_, id] = Regex.run(~r/([^@]*)@/, Atom.to_string(node_name))
+    String.to_atom(id)
   end
 
 end
