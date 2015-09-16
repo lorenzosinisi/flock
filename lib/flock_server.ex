@@ -7,8 +7,12 @@ defmodule Flock.Server do
     GenServer.call(@server, {:start_node, name, Map.get(options, :config, nil), Map.get(options, :apps, [])})
   end
 
-  def stop_node (name) do
+  def stop_node(name) do
     GenServer.call(@server, {:stop_node, name})
+  end
+
+  def stop_all do
+    GenServer.call(@server, {:stop_all})
   end
 
   def nodes do
@@ -39,6 +43,16 @@ defmodule Flock.Server do
     node_name = node_name(name)
     :ok = :slave.stop(node_name)
     {:reply, :ok, %{ state | nodes: nodes -- [node_name] }}
+  end
+
+  def handle_call({:stop_all}, _from, state = %{nodes: nodes}) do
+    Enum.each(
+      nodes,
+      fn(node_name) ->
+        :ok = :slave.stop(node_name)
+      end
+    )
+    {:reply, :ok, %{ state | nodes: [] }}
   end
 
   def handle_call({:nodes}, _from, state = %{nodes: nodes}) do
