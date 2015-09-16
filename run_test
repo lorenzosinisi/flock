@@ -1,0 +1,1 @@
+MIX_ENV=test elixir --sname test_master@localhost -S mix run -e "Mix.Tasks.Test.run([])"
