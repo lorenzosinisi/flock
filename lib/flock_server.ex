@@ -13,7 +13,7 @@ defmodule Flock.Server do
   end
 
   def start_nodes(groups = [first_group|_], options) when is_map(options) and is_list(first_group) do
-    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :config, nil), Map.get(options, :apps, [])})
+    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :config, nil), Map.get(options, :apps, [])}, 10000)
   end
 
   def stop_node(name) do
