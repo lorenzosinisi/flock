@@ -3,12 +3,17 @@ defmodule Flock.Server do
 
   @server :flock_server
 
-  def start_nodes(names, options) when is_list(names) and is_map(options) do
-    Enum.map(names, fn(name) -> start_node(name, options) end)
+  def start_node(name, options) when is_atom(name) and is_map(options) do
+    [new_node] = start_nodes([name], options)
+    new_node
   end
 
-  def start_node(name, options) when is_atom(name) and is_map(options) do
-    GenServer.call(@server, {:start_node, name, Map.get(options, :config, nil), Map.get(options, :apps, [])})
+  def start_nodes(names = [first_name|_], options) when is_map(options) and is_atom(first_name) do
+    start_nodes([names], options)
+  end
+
+  def start_nodes(groups = [first_group|_], options) when is_map(options) and is_list(first_group) do
+    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :config, nil), Map.get(options, :apps, [])})
   end
 
   def stop_node(name) do
@@ -46,10 +51,13 @@ defmodule Flock.Server do
     {:ok, state}
   end
 
-  def handle_call({:start_node, name, config, apps}, _from, state = %{nodes: nodes}) do
-    node = start_node(name, config, apps)
-    {:reply, node, %{ state | nodes: [node | nodes] }}
+  def handle_call({:start_nodes, groups = [first_group|_], config, apps}, _from, state = %{nodes: nodes}) when is_list(first_group) do
+    new_nodes = Enum.map(List.flatten(groups), &start_node/1)
+    enforce_groups(groups)
+    Enum.each(new_nodes, fn(new_node) -> start_apps(new_node, config, apps) end)
+    {:reply, new_nodes, %{ state | nodes: nodes ++ new_nodes}}
   end
+
 
   def handle_call({:stop_node, name}, _from, state = %{nodes: nodes}) do
     node_name = node_name(name)
@@ -68,17 +76,26 @@ defmodule Flock.Server do
   end
 
   def handle_call({:split, groups}, _from, state) do
-    Enum.each(Enum.with_index(groups), fn({group, index}) -> enforce_group(group, index, List.flatten(groups) -- group ) end)
+    enforce_groups(groups)
     {:reply, :ok, state}
   end
 
   def handle_call({:join}, _from, state = %{nodes: nodes}) do
-    enforce_group(Enum.map(nodes, &node_id/1), 1, [])
+    enforce_group(Enum.map(nodes, &node_id/1), 0, [])
     {:reply, :ok, state}
   end
 
   def handle_call({:nodes}, _from, state = %{nodes: nodes}) do
     {:reply, nodes, state}
+  end
+
+  def enforce_groups(groups) do
+    Enum.each(
+      Enum.with_index(groups),
+      fn({group, index}) ->
+        enforce_group(group, index, List.flatten(groups) -- group)
+      end
+    )
   end
 
   def enforce_group(members, index, others) do
@@ -121,7 +138,7 @@ defmodule Flock.Server do
     rpc(member, :erlang, :set_cookie, [node_name(member), String.to_atom("group_cookie_" <> inspect(index)) ])
   end
 
-  def start_node(name, config, apps) do
+  def start_node(name) do
     # start the node
     {:ok, node} = :slave.start_link(:localhost, name)
     # add all the paths
@@ -131,7 +148,11 @@ defmodule Flock.Server do
     )
     # elixir and mix
     {:ok, _} = :rpc.call(node, :application, :ensure_all_started, [:elixir])
-    :rpc.call(node, Code, :require_file, ["mix.exs"])
+    # :rpc.call(node, Code, :require_file, ["mix.exs"])
+    node
+  end
+
+  def start_apps(node, config, apps) do
     load_config(node, config)
     Enum.each(apps, fn(app) -> start_app(node, app) end)
     node
