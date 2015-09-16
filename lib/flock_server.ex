@@ -148,7 +148,7 @@ defmodule Flock.Server do
     )
     # elixir and mix
     {:ok, _} = :rpc.call(node, :application, :ensure_all_started, [:elixir])
-    # :rpc.call(node, Code, :require_file, ["mix.exs"])
+    :rpc.call(node, Code, :require_file, ["mix.exs"])
     node
   end
 
