@@ -68,12 +68,12 @@ defmodule Flock.Server do
   end
 
   def handle_call({:split, groups}, _from, state) do
-    Enum.each(groups, fn(group) -> enforce_group(group, List.flatten(groups) -- group ) end)
+    Enum.each(Enum.with_index(groups), fn({group, index}) -> enforce_group(group, index, List.flatten(groups) -- group ) end)
     {:reply, :ok, state}
   end
 
   def handle_call({:join}, _from, state = %{nodes: nodes}) do
-    enforce_group(Enum.map(nodes, &node_id/1), [])
+    enforce_group(Enum.map(nodes, &node_id/1), 1, [])
     {:reply, :ok, state}
   end
 
@@ -81,7 +81,8 @@ defmodule Flock.Server do
     {:reply, nodes, state}
   end
 
-  def enforce_group(members, others) do
+  def enforce_group(members, index, others) do
+    Enum.each(members, fn(member) -> set_cookie(member, index) end)
     Enum.each(
       members,
       fn(member) ->
@@ -114,6 +115,10 @@ defmodule Flock.Server do
         end
       end
     )
+  end
+
+  def set_cookie(member, index) do
+    rpc(member, :erlang, :set_cookie, [node_name(member), String.to_atom("group_cookie_" <> inspect(index)) ])
   end
 
   def start_node(name, config, apps) do

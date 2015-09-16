@@ -45,13 +45,6 @@ defmodule FlockServerTest do
   end
 
   test "nodes can see each other" do
-    Flock.Server.start_node(:test1, %{})
-    Flock.Server.start_node(:test2, %{})
-    assert Enum.any?(visible_nodes(:test1), fn(node_name) -> node_name == :test2@localhost end )
-    assert Enum.any?(visible_nodes(:test2), fn(node_name) -> node_name == :test1@localhost end )
-  end
-
-  test "nodes can not see each other" do
     nodes = [:one, :two, :three, :four, :five]
     Flock.Server.start_nodes(nodes, %{})
     all = Enum.sort([node(), :one@localhost, :two@localhost, :three@localhost, :four@localhost, :five@localhost])
@@ -61,6 +54,10 @@ defmodule FlockServerTest do
   test "network split" do
     Flock.Server.start_nodes([:one, :two, :three, :four, :five], %{})
     Flock.Server.split([[:one, :two, :three], [:four, :five]])
+    assert :x = Flock.Server.rpc(:one, :rpc, :call, [:two@localhost,  String, :to_atom, ["x"]])
+    assert {:badrpc, :nodedown} = Flock.Server.rpc(:one, :rpc, :call, [:four@localhost,  String, :to_atom, ["x"]])
+    # make sure messages don't cause a reconnect
+    assert :hello = Flock.Server.rpc(:one, :erlang, :send, [{:flock_server, :four@localhost}, :hello])
     goup1 = Enum.sort([node(), :one@localhost, :two@localhost, :three@localhost])
     can_see(:one,   goup1)
     can_see(:two,   goup1)
