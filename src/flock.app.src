@@ -1,0 +1,6 @@
+{application, flock, [
+    {description, "test distributed applications"},
+    {vsn, git},
+    {registered, [flock_server]},
+    {applications, [kernel, stdlib]}
+]}.
