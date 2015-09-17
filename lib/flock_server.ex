@@ -40,6 +40,10 @@ defmodule Flock.Server do
     :rpc.call(node_name(name), module, function, args)
   end
 
+  def rpc(name, fun) do
+    :rpc.call(node_name(name), :erlang, :apply, [fun, []])
+  end
+
   def start_link do
     GenServer.start_link(__MODULE__, [], name: @server)
   end

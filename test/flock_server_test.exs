@@ -44,6 +44,12 @@ defmodule FlockServerTest do
     assert [] = Flock.Server.nodes
   end
 
+  test "rpc" do
+    Flock.Server.start_node(:test1, %{})
+    assert :x == Flock.Server.rpc(:test1, String, :to_atom, ["x"])
+    assert :test1@localhost == Flock.Server.rpc(:test1, &node/0)
+  end
+
   test "nodes can see each other" do
     nodes = [:one, :two, :three, :four, :five]
     Flock.Server.start_nodes(nodes, %{})
