@@ -22,9 +22,9 @@ defmodule FlockServerTest do
     assert {:sasl, _, _} = :lists.keyfind(:sasl, 1, apps)
   end
 
-  test "starting a node with config" do
-    assert :test@localhost == Flock.Server.start_node(:test, %{config: ["config/test_config.exs"]})
-    assert [foo: :bar] = Flock.Server.rpc(:test, :application, :get_all_env, [:dummy_app])
+  test "starting a node with scripts" do
+    assert :test@localhost == Flock.Server.start_node(:test, %{scripts: ["test/test.exs"]})
+    assert {:ok, :bar} = Flock.Server.rpc(:test, :application, :get_env, [:flock, :foo])
   end
 
   test "stopping a node" do

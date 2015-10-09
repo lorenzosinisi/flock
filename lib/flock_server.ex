@@ -13,7 +13,7 @@ defmodule Flock.Server do
   end
 
   def start_nodes(groups = [first_group|_], options) when is_map(options) and is_list(first_group) do
-    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :config, nil), Map.get(options, :apps, [])}, 10000)
+    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :scripts, []), Map.get(options, :apps, [])}, 10000)
   end
 
   def stop_node(name) do
@@ -55,10 +55,10 @@ defmodule Flock.Server do
     {:ok, state}
   end
 
-  def handle_call({:start_nodes, groups = [first_group|_], config, apps}, _from, state = %{nodes: nodes}) when is_list(first_group) do
+  def handle_call({:start_nodes, groups = [first_group|_], scripts, apps}, _from, state = %{nodes: nodes}) when is_list(first_group) do
     new_nodes = Enum.map(List.flatten(groups), &start_node/1)
     enforce_groups(groups)
-    Enum.each(new_nodes, fn(new_node) -> start_apps(new_node, config, apps) end)
+    Enum.each(new_nodes, fn(new_node) -> start_apps(new_node, scripts, apps) end)
     {:reply, new_nodes, %{ state | nodes: nodes ++ new_nodes}}
   end
 
@@ -156,8 +156,8 @@ defmodule Flock.Server do
     node
   end
 
-  def start_apps(node, config, apps) do
-    load_config(node, config)
+  def start_apps(node, scripts, apps) do
+    execute_scripts(node, scripts)
     Enum.each(apps, fn(app) -> start_app(node, app) end)
     node
   end
@@ -166,23 +166,16 @@ defmodule Flock.Server do
     {:ok, _} = :rpc.call(node, :application, :ensure_all_started, [app])
   end
 
-  def load_config(_node, nil) do
+  def execute_scripts(_node, nil) do
     :noop
   end
 
-  def load_config(node, config) do
-    configs = :rpc.call(node, Mix.Config, :read!, [config])
-    Enum.each(
-      configs,
-      fn({app, config}) ->
-        Enum.each(
-          config,
-          fn({key, value}) ->
-            :ok = :rpc.call(node, :application, :set_env, [app, key, value])
-          end
-        )
-      end
-    )
+  def execute_scripts(node, scripts) do
+    Enum.each(scripts, fn(script) -> execute_script(node, script) end)
+  end
+
+  def execute_script(node, script) do
+    :rpc.call(node, Code, :eval_file, [script])
   end
 
   def node_name(name) when is_atom(name) do
