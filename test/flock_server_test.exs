@@ -1,5 +1,5 @@
 defmodule FlockServerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   setup do
     Application.ensure_all_started(:flock)
@@ -113,7 +113,7 @@ defmodule FlockServerTest do
   end
 
   def visible_nodes(name) do
-    Enum.sort(Flock.Server.rpc(name, :erlang, :nodes, []))
+    Enum.sort(Flock.Server.rpc(name, :erlang, :nodes, [:connected]))
   end
 
   def can_see(name, others) do
