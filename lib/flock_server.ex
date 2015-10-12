@@ -24,8 +24,8 @@ defmodule Flock.Server do
     GenServer.call(@server, {:stop_all})
   end
 
-  def split(groups) do
-    GenServer.call(@server, {:split, groups})
+  def group(groups) do
+    GenServer.call(@server, {:group, groups})
   end
 
   def join do
@@ -87,7 +87,7 @@ defmodule Flock.Server do
     {:reply, :ok, %{ state | nodes: [] }}
   end
 
-  def handle_call({:split, groups}, _from, state) do
+  def handle_call({:group, groups}, _from, state) do
     enforce_groups(groups)
     {:reply, :ok, state}
   end

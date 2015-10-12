@@ -83,7 +83,7 @@ defmodule FlockServerTest do
 
   test "network split" do
     Flock.Server.start_nodes([:one, :two, :three, :four, :five], %{})
-    Flock.Server.split([[:one, :two, :three], [:four, :five]])
+    Flock.Server.group([[:one, :two, :three], [:four, :five]])
     assert :x = Flock.Server.rpc(:one, :rpc, :call, [:two@localhost,  String, :to_atom, ["x"]])
     assert {:badrpc, :nodedown} = Flock.Server.rpc(:one, :rpc, :call, [:four@localhost,  String, :to_atom, ["x"]])
     # make sure messages don't cause a reconnect
@@ -99,7 +99,7 @@ defmodule FlockServerTest do
 
   test "join" do
     Flock.Server.start_nodes([:one, :two, :three], %{})
-    Flock.Server.split([[:one, :two], [:three]])
+    Flock.Server.group([[:one, :two], [:three]])
     assert [:test_master@localhost, :two@localhost] == visible_nodes(:one)
     Flock.Server.join
     expected = Enum.sort([node(), :two@localhost, :three@localhost])
@@ -111,7 +111,7 @@ defmodule FlockServerTest do
     can_see(:one,   [node(), :two@localhost])
     can_see(:two,   [node(), :one@localhost])
     can_see(:three, [node()])
-    Flock.Server.split([[:one], [:two, :three]])
+    Flock.Server.group([[:one], [:two, :three]])
     can_see(:one,   [node()])
     can_see(:two,   [node(), :three@localhost])
     can_see(:three, [node(), :two@localhost])
