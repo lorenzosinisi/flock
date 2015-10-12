@@ -13,7 +13,7 @@ defmodule Flock.Server do
   end
 
   def start_nodes(groups = [first_group|_], options) when is_map(options) and is_list(first_group) do
-    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :scripts, []), Map.get(options, :apps, [])}, 10000)
+    GenServer.call(@server, {:start_nodes, groups, Map.get(options, :rpcs, [])}, 10000)
   end
 
   def stop_node(name) do
@@ -48,6 +48,14 @@ defmodule Flock.Server do
     GenServer.start_link(__MODULE__, [], name: @server)
   end
 
+  def mix_rpcs do
+    [
+      {Application,          :ensure_all_started, [:mix]},
+      {Mix.Tasks.Loadconfig, :run,                [[]]},
+      {Code,                 :load_file,          ["mix.exs"]}
+    ]
+ end
+
   def init([]) do
     state = %{
       nodes: []
@@ -55,10 +63,10 @@ defmodule Flock.Server do
     {:ok, state}
   end
 
-  def handle_call({:start_nodes, groups = [first_group|_], scripts, apps}, _from, state = %{nodes: nodes}) when is_list(first_group) do
+  def handle_call({:start_nodes, groups = [first_group|_], rpcs}, _from, state = %{nodes: nodes}) when is_list(first_group) do
     new_nodes = Enum.map(List.flatten(groups), &start_node/1)
     enforce_groups(groups)
-    Enum.each(new_nodes, fn(new_node) -> start_apps(new_node, scripts, apps) end)
+    Enum.each(new_nodes, fn(new_node) -> prepare_node(new_node, rpcs) end)
     {:reply, new_nodes, %{ state | nodes: nodes ++ new_nodes}}
   end
 
@@ -150,32 +158,22 @@ defmodule Flock.Server do
       :code.get_path,
       fn(path) -> true = :rpc.call(node, :code, :add_path, [path]) end
     )
-    # elixir and mix
-    {:ok, _} = :rpc.call(node, :application, :ensure_all_started, [:elixir])
-    :rpc.call(node, Code, :require_file, ["mix.exs"])
     node
   end
 
-  def start_apps(node, scripts, apps) do
-    execute_scripts(node, scripts)
-    Enum.each(apps, fn(app) -> start_app(node, app) end)
+  def prepare_node(node, rpcs) do
+    Enum.each(
+      rpcs,
+      fn({module, function, args}) ->
+        case :rpc.call(node, module, function, args) do
+          {:badrpc, reason} ->
+            throw({:badrpc, {reason, {node, module, function, args}}})
+          _ ->
+            :noop
+        end
+      end
+    )
     node
-  end
-
-  def start_app(node, app) do
-    {:ok, _} = :rpc.call(node, :application, :ensure_all_started, [app])
-  end
-
-  def execute_scripts(_node, nil) do
-    :noop
-  end
-
-  def execute_scripts(node, scripts) do
-    Enum.each(scripts, fn(script) -> execute_script(node, script) end)
-  end
-
-  def execute_script(node, script) do
-    :rpc.call(node, Code, :eval_file, [script])
   end
 
   def node_name(name) when is_atom(name) do

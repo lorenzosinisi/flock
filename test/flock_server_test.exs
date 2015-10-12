@@ -17,15 +17,24 @@ defmodule FlockServerTest do
   end
 
   test "starting a node with apps" do
-    assert :test@localhost == Flock.Server.start_node(:test, %{apps: [:sasl]})
+    assert :test@localhost == Flock.Server.start_node(:test, %{rpcs: [{:application, :ensure_all_started, [:sasl]}]})
     apps = Flock.Server.rpc(:test, :application, :which_applications, [])
     assert {:sasl, _, _} = :lists.keyfind(:sasl, 1, apps)
   end
 
   test "starting a node with scripts" do
-    assert :test@localhost == Flock.Server.start_node(:test, %{scripts: ["test/test.exs"]})
+    assert :test@localhost == Flock.Server.start_node(:test, %{rpcs: [{Code, :eval_file, ["test/test.exs"]}]})
     assert {:ok, :bar} = Flock.Server.rpc(:test, :application, :get_env, [:flock, :foo])
   end
+
+  test "starting a node with mix" do
+    assert :test@localhost == Flock.Server.start_node(:test, %{rpcs: Flock.Server.mix_rpcs})
+    expected   = [:mix, :elixir, :compiler, :stdlib, :kernel]
+    apps_specs = Flock.Server.rpc(:test, :application, :which_applications, [])
+    apps = Enum.map(apps_specs, fn({app, _, _}) -> app end)
+    assert expected == apps
+  end
+
 
   test "stopping a node" do
     Flock.Server.start_node(:test, %{})
