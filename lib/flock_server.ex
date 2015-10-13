@@ -56,6 +56,10 @@ defmodule Flock.Server do
     ]
  end
 
+ def load_config_rpcs(FileName) do
+   [{__MODULE__, :apply_config, [FileName]}]
+ end
+
   def init([]) do
     state = %{
       nodes: []
@@ -184,5 +188,15 @@ defmodule Flock.Server do
     [_, id] = Regex.run(~r/([^@]*)@/, Atom.to_string(node_name))
     String.to_atom(id)
   end
+
+  def apply_config(file_name) do
+    {:ok, [configs]} = :file.consult(file_name)
+    Enum.each(configs, fn({app, vars}) -> apply_app_config(app, vars) end)
+  end
+
+  def apply_app_config(app, vars) do
+    Enum.each(vars, fn({key, value}) -> :application.set_env(app, key, value) end)
+  end
+
 
 end
